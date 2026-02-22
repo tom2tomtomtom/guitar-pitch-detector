@@ -143,3 +143,51 @@ export function isNoteMatch(
 export function getAllNoteNames(): readonly NoteName[] {
   return NOTE_NAMES;
 }
+
+/**
+ * Guitar fretboard: maps each string + fret to a NoteInfo.
+ * String numbers are 1-6 (1 = high E, 6 = low E) — standard guitar convention.
+ */
+export interface FretPosition {
+  string: number;        // 1 (high E) to 6 (low E)
+  fret: number;          // 0 (open) to NUM_FRETS
+  note: NoteInfo;
+}
+
+export const STRING_NAMES = ['high E', 'B', 'G', 'D', 'A', 'low E'];
+// Open string MIDI notes: string 1 (high E) = 64, string 2 (B) = 59, etc.
+const OPEN_STRING_MIDI = [64, 59, 55, 50, 45, 40];
+export const NUM_FRETS = 12;
+
+export function buildFretboard(): FretPosition[] {
+  const positions: FretPosition[] = [];
+  for (let s = 0; s < 6; s++) {
+    for (let f = 0; f <= NUM_FRETS; f++) {
+      positions.push({
+        string: s + 1,
+        fret: f,
+        note: noteFromMidi(OPEN_STRING_MIDI[s] + f),
+      });
+    }
+  }
+  return positions;
+}
+
+/** Get the string name for display: "1st (high E)", "5th (A)", etc. */
+export function getStringLabel(stringNum: number): string {
+  const suffixes = ['st', 'nd', 'rd', 'th', 'th', 'th'];
+  return `${stringNum}${suffixes[stringNum - 1]} string (${STRING_NAMES[stringNum - 1]})`;
+}
+
+/** Find all fret positions where a given note name can be played (any octave). */
+export function findNoteOnFretboard(noteName: NoteName): FretPosition[] {
+  return buildFretboard().filter((p) => p.note.name === noteName);
+}
+
+/** Find the specific fret position for a note with exact octave match. */
+export function findExactNoteOnFretboard(note: NoteInfo): FretPosition[] {
+  return buildFretboard().filter(
+    (p) => p.note.name === note.name && p.note.octave === note.octave
+  );
+}
+

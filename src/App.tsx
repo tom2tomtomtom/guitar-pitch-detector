@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { usePitchDetector } from './hooks/usePitchDetector';
 import { PitchMeter } from './components/PitchMeter';
-import { TargetNoteMode } from './components/TargetNoteMode';
+import { TeachingMode } from './components/TeachingMode';
+import { TestMode } from './components/TestMode';
 import { ScalePractice } from './components/ScalePractice';
 
-type Mode = 'tuner' | 'target' | 'scale';
+type Mode = 'tuner' | 'teaching' | 'test' | 'scale';
 
 const MODES: { key: Mode; label: string; description: string }[] = [
   { key: 'tuner', label: 'Free Play', description: 'See what note you\'re playing' },
-  { key: 'target', label: 'Target Note', description: 'Hit the target note' },
-  { key: 'scale', label: 'Scale Practice', description: 'Play through a scale' },
+  { key: 'teaching', label: 'Learn', description: 'See notes light up on the fretboard as you play' },
+  { key: 'test', label: 'Test', description: 'Play specific notes on specific strings' },
+  { key: 'scale', label: 'Scales', description: 'Play through a scale' },
 ];
 
 export default function App() {
@@ -120,8 +122,15 @@ export default function App() {
         {mode === 'tuner' && (
           <PitchMeter note={currentNote} pitch={currentPitch} />
         )}
-        {mode === 'target' && (
-          <TargetNoteMode
+        {mode === 'teaching' && (
+          <TeachingMode
+            currentNote={currentNote}
+            currentPitch={currentPitch}
+            isListening={isListening}
+          />
+        )}
+        {mode === 'test' && (
+          <TestMode
             currentNote={currentNote}
             currentPitch={currentPitch}
             isListening={isListening}

@@ -15,8 +15,10 @@ export function ScalePractice({ currentNote, currentPitch, isListening }: ScaleP
   const [currentIndex, setCurrentIndex] = useState(0);
   const [completedNotes, setCompletedNotes] = useState<boolean[]>([]);
   const [isComplete, setIsComplete] = useState(false);
+  const [stableFeedback, setStableFeedback] = useState<string | null>(null);
   const holdTimerRef = useRef<number | null>(null);
   const matchedRef = useRef(false);
+  const feedbackTimerRef = useRef<number | null>(null);
 
   const scaleNotes = getScaleNotes(rootNote, scaleKey);
   const targetNote = scaleNotes[currentIndex];
@@ -68,9 +70,22 @@ export function ScalePractice({ currentNote, currentPitch, isListening }: ScaleP
     }
   }, [currentPitch, currentNote, targetNote, tolerance, advanceNote, isComplete]);
 
+  // Debounced feedback to avoid flashing
+  useEffect(() => {
+    if (!currentNote || matchedRef.current || isComplete) return;
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    feedbackTimerRef.current = window.setTimeout(() => {
+      setStableFeedback(currentNote.fullName);
+    }, 120);
+    return () => {
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    };
+  }, [currentNote, isComplete]);
+
   useEffect(() => {
     return () => {
       if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
     };
   }, []);
 
@@ -220,8 +235,8 @@ export function ScalePractice({ currentNote, currentPitch, isListening }: ScaleP
         }}>
           {matchResult?.match
             ? 'Hold steady...'
-            : currentNote
-              ? `Playing: ${currentNote.fullName}`
+            : stableFeedback
+              ? `Playing: ${stableFeedback}`
               : 'Listening...'}
         </div>
       )}

@@ -1,42 +1,81 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { type NoteInfo, isNoteMatch, GUITAR_STANDARD_TUNING } from '../lib/noteMapping';
+import { Fretboard } from './Fretboard';
+import {
+  type NoteInfo,
+  type FretPosition,
+  isNoteMatch,
+  buildFretboard,
+  STRING_NAMES,
+} from '../lib/noteMapping';
 import type { PitchResult } from '../lib/pitchDetector';
 
-interface TargetNoteModeProps {
+interface TestModeProps {
   currentNote: NoteInfo | null;
   currentPitch: PitchResult | null;
   isListening: boolean;
 }
 
-// Notes commonly played on guitar (open strings + first few frets)
-const TARGET_NOTES: NoteInfo[] = GUITAR_STANDARD_TUNING;
+interface Challenge {
+  position: FretPosition;
+  prompt: string;
+}
+
+// Build a pool of guitar-friendly challenges
+function buildChallengePool(): Challenge[] {
+  const fretboard = buildFretboard();
+  const challenges: Challenge[] = [];
+
+  for (const pos of fretboard) {
+    // Skip very high frets for beginners (keep frets 0-7)
+    if (pos.fret > 7) continue;
+
+    const stringLabel = STRING_NAMES[pos.string - 1];
+    const fretLabel = pos.fret === 0 ? 'open' : `fret ${pos.fret}`;
+
+    challenges.push({
+      position: pos,
+      prompt: `Play ${pos.note.name} on the ${stringLabel} string (${fretLabel})`,
+    });
+  }
+
+  return challenges;
+}
+
+function pickRandom(pool: Challenge[], exclude?: Challenge): Challenge {
+  const filtered = exclude ? pool.filter((c) => c !== exclude) : pool;
+  return filtered[Math.floor(Math.random() * filtered.length)];
+}
+
+const CHALLENGE_POOL = buildChallengePool();
 
 interface ScoreEntry {
-  target: string;
+  challenge: Challenge;
   hit: boolean;
   cents: number;
 }
 
-export function TargetNoteMode({ currentNote, currentPitch, isListening }: TargetNoteModeProps) {
-  const [targetIndex, setTargetIndex] = useState(0);
+export function TestMode({ currentNote, currentPitch, isListening }: TestModeProps) {
+  const [challenge, setChallenge] = useState<Challenge>(() => pickRandom(CHALLENGE_POOL));
   const [tolerance, setTolerance] = useState(50);
   const [score, setScore] = useState<ScoreEntry[]>([]);
   const [isMatched, setIsMatched] = useState(false);
   const [streakCount, setStreakCount] = useState(0);
-  const [stableFeedback, setStableFeedback] = useState<string | null>(null);
+  const [feedbackNote, setFeedbackNote] = useState<string | null>(null);
   const holdTimerRef = useRef<number | null>(null);
   const matchedRef = useRef(false);
   const feedbackTimerRef = useRef<number | null>(null);
 
-  const targetNote = TARGET_NOTES[targetIndex];
+  const targetNote = challenge.position.note;
 
-  const advanceTarget = useCallback(() => {
-    setTargetIndex((prev) => (prev + 1) % TARGET_NOTES.length);
+  const advanceChallenge = useCallback(() => {
+    const next = pickRandom(CHALLENGE_POOL, challenge);
+    setChallenge(next);
     setIsMatched(false);
     matchedRef.current = false;
-  }, []);
+    setFeedbackNote(null);
+  }, [challenge]);
 
-  // Check if current note matches target
+  // Check note match
   useEffect(() => {
     if (!currentPitch || !currentNote || matchedRef.current) {
       if (holdTimerRef.current) {
@@ -48,36 +87,26 @@ export function TargetNoteMode({ currentNote, currentPitch, isListening }: Targe
 
     const { match, cents } = isNoteMatch(currentPitch.frequency, targetNote, tolerance);
 
+    // Update feedback with debounce so it doesn't flash
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    feedbackTimerRef.current = window.setTimeout(() => {
+      setFeedbackNote(currentNote.fullName);
+    }, 100);
+
     if (match && !holdTimerRef.current) {
-      // Require holding the note for 500ms to count as a hit
       holdTimerRef.current = window.setTimeout(() => {
         matchedRef.current = true;
         setIsMatched(true);
-        setScore((prev) => [...prev, { target: targetNote.fullName, hit: true, cents }]);
+        setScore((prev) => [...prev, { challenge, hit: true, cents }]);
         setStreakCount((prev) => prev + 1);
-
-        // Auto-advance after a short delay
-        setTimeout(advanceTarget, 800);
+        setTimeout(advanceChallenge, 1000);
       }, 500);
     } else if (!match && holdTimerRef.current) {
       clearTimeout(holdTimerRef.current);
       holdTimerRef.current = null;
     }
-  }, [currentPitch, currentNote, targetNote, tolerance, advanceTarget]);
+  }, [currentPitch, currentNote, targetNote, tolerance, advanceChallenge, challenge]);
 
-  // Debounced feedback text so messages don't flash
-  useEffect(() => {
-    if (!currentNote || matchedRef.current) return;
-    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
-    feedbackTimerRef.current = window.setTimeout(() => {
-      setStableFeedback(currentNote.fullName);
-    }, 120);
-    return () => {
-      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
-    };
-  }, [currentNote]);
-
-  // Cleanup timers on unmount
   useEffect(() => {
     return () => {
       if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
@@ -85,16 +114,16 @@ export function TargetNoteMode({ currentNote, currentPitch, isListening }: Targe
     };
   }, []);
 
-  const skipNote = () => {
-    setScore((prev) => [...prev, { target: targetNote.fullName, hit: false, cents: 0 }]);
+  const skipChallenge = () => {
+    setScore((prev) => [...prev, { challenge, hit: false, cents: 0 }]);
     setStreakCount(0);
-    advanceTarget();
+    advanceChallenge();
   };
 
   const resetScore = () => {
     setScore([]);
     setStreakCount(0);
-    setTargetIndex(0);
+    advanceChallenge();
   };
 
   const hits = score.filter((s) => s.hit).length;
@@ -106,37 +135,66 @@ export function TargetNoteMode({ currentNote, currentPitch, isListening }: Targe
     : null;
 
   return (
-    <div style={{ padding: '1.5rem 0' }}>
-      {/* Target note display */}
+    <div style={{ padding: '1rem 0' }}>
+      {/* Challenge prompt */}
       <div style={{
         textAlign: 'center',
-        marginBottom: '2rem',
+        marginBottom: '1.5rem',
       }}>
-        <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginBottom: '0.5rem' }}>
-          Play this note:
-        </div>
         <div style={{
-          fontSize: '5rem',
-          fontWeight: 700,
+          fontSize: '1.3rem',
+          fontWeight: 600,
           color: isMatched ? '#22c55e' : '#e2e8f0',
+          lineHeight: 1.4,
+          transition: 'color 0.2s ease',
+          padding: '0 1rem',
+        }}>
+          {isMatched ? (
+            <span>Correct!</span>
+          ) : (
+            challenge.prompt
+          )}
+        </div>
+
+        {/* Show the target note big */}
+        <div style={{
+          fontSize: '4rem',
+          fontWeight: 700,
+          color: isMatched ? '#22c55e' : '#a5b4fc',
           lineHeight: 1,
-          transition: 'color 0.2s ease, transform 0.2s ease',
+          marginTop: '0.5rem',
+          transition: 'all 0.2s ease',
           transform: isMatched ? 'scale(1.1)' : 'scale(1)',
         }}>
           {targetNote.name}
-          <span style={{ fontSize: '2rem', opacity: 0.5 }}>{targetNote.octave}</span>
         </div>
-        <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '0.25rem' }}>
+        <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.25rem' }}>
           {targetNote.frequency.toFixed(1)} Hz
         </div>
       </div>
 
-      {/* Match feedback */}
+      {/* Fretboard with target highlighted */}
+      <div style={{
+        background: 'rgba(100,116,139,0.04)',
+        borderRadius: '12px',
+        padding: '0.75rem 0.5rem',
+        marginBottom: '1.5rem',
+        border: '1px solid rgba(100,116,139,0.1)',
+      }}>
+        <Fretboard
+          targetPositions={[challenge.position]}
+          activeNote={isMatched ? targetNote : (matchResult?.match ? currentNote : null)}
+          highlightPositions={isMatched ? [challenge.position] : []}
+        />
+      </div>
+
+      {/* Feedback */}
       {isListening && (
         <div style={{
           textAlign: 'center',
-          padding: '1rem',
-          borderRadius: '12px',
+          padding: '0.75rem',
+          borderRadius: '10px',
+          marginBottom: '1.25rem',
           background: isMatched
             ? 'rgba(34, 197, 94, 0.1)'
             : matchResult?.match
@@ -149,21 +207,23 @@ export function TargetNoteMode({ currentNote, currentPitch, isListening }: Targe
                 ? 'rgba(234, 179, 8, 0.3)'
                 : 'rgba(100, 116, 139, 0.1)'
           }`,
-          marginBottom: '1.5rem',
-          transition: 'all 0.15s ease',
+          transition: 'all 0.2s ease',
+          minHeight: '40px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}>
           {isMatched ? (
-            <span style={{ color: '#22c55e', fontSize: '1.2rem', fontWeight: 600 }}>
-              Got it!
+            <span style={{ color: '#22c55e', fontSize: '1rem', fontWeight: 600 }}>
+              Got it! Next one coming...
             </span>
           ) : matchResult?.match ? (
             <span style={{ color: '#eab308' }}>
-              That's it — hold steady!
-              ({matchResult.cents > 0 ? '+' : ''}{matchResult.cents} cents)
+              That's it — hold steady! ({matchResult.cents > 0 ? '+' : ''}{matchResult.cents} cents)
             </span>
-          ) : stableFeedback ? (
+          ) : feedbackNote ? (
             <span style={{ color: '#94a3b8' }}>
-              You're playing {stableFeedback}
+              You're playing {feedbackNote}
             </span>
           ) : (
             <span style={{ color: '#475569' }}>Listening...</span>
@@ -176,28 +236,26 @@ export function TargetNoteMode({ currentNote, currentPitch, isListening }: Targe
         display: 'flex',
         gap: '0.75rem',
         justifyContent: 'center',
-        marginBottom: '1.5rem',
+        marginBottom: '1.25rem',
         flexWrap: 'wrap',
       }}>
-        <button onClick={skipNote} style={buttonStyle('#475569')}>
+        <button onClick={skipChallenge} style={btnStyle('#475569')}>
           Skip
         </button>
-        <button onClick={resetScore} style={buttonStyle('#64748b')}>
+        <button onClick={resetScore} style={btnStyle('#64748b')}>
           Reset
         </button>
       </div>
 
-      {/* Tolerance slider */}
+      {/* Tolerance */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
         gap: '0.75rem',
         justifyContent: 'center',
-        marginBottom: '1.5rem',
+        marginBottom: '1.25rem',
       }}>
-        <label style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-          Tolerance:
-        </label>
+        <label style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Tolerance:</label>
         <input
           type="range"
           min="10"
@@ -211,7 +269,7 @@ export function TargetNoteMode({ currentNote, currentPitch, isListening }: Targe
         </span>
       </div>
 
-      {/* Score display */}
+      {/* Score */}
       <div style={{
         display: 'flex',
         justifyContent: 'center',
@@ -243,7 +301,7 @@ function ScoreStat({ label, value, highlight }: { label: string; value: string; 
   );
 }
 
-function buttonStyle(color: string): React.CSSProperties {
+function btnStyle(color: string): React.CSSProperties {
   return {
     padding: '0.5rem 1.25rem',
     borderRadius: '8px',
