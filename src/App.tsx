@@ -7,16 +7,18 @@ import { ScalePractice } from './components/ScalePractice';
 
 type Mode = 'tuner' | 'teaching' | 'test' | 'scale';
 
-const MODES: { key: Mode; label: string; description: string }[] = [
-  { key: 'tuner', label: 'Free Play', description: 'See what note you\'re playing' },
-  { key: 'teaching', label: 'Learn', description: 'See notes light up on the fretboard as you play' },
-  { key: 'test', label: 'Test', description: 'Play specific notes on specific strings' },
-  { key: 'scale', label: 'Scales', description: 'Play through a scale' },
+const MODES: { key: Mode; label: string; icon: string; description: string }[] = [
+  { key: 'tuner', label: 'Free Play', icon: '🎵', description: 'See what note you\'re playing with real-time tuning feedback' },
+  { key: 'teaching', label: 'Learn', icon: '📖', description: 'See notes light up on the fretboard as you play' },
+  { key: 'test', label: 'Test', icon: '🎯', description: 'Play specific notes on specific strings to build accuracy' },
+  { key: 'scale', label: 'Scales', icon: '🎶', description: 'Practice playing through scales step by step' },
 ];
 
 export default function App() {
   const [mode, setMode] = useState<Mode>('tuner');
-  const { isListening, currentPitch, currentNote, error, startListening, stopListening } = usePitchDetector();
+  const { isListening, currentPitch, currentNote, audioLevel, error, startListening, stopListening } = usePitchDetector();
+
+  const currentMode = MODES.find((m) => m.key === mode)!;
 
   return (
     <div style={{
@@ -25,6 +27,19 @@ export default function App() {
       color: '#e2e8f0',
       fontFamily: 'system-ui, -apple-system, sans-serif',
     }}>
+      {/* Pulsing keyframe animation for listening state */}
+      <style>{`
+        @keyframes pulse-ring {
+          0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+          70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        @keyframes level-bar {
+          from { opacity: 0.6; }
+          to { opacity: 1; }
+        }
+      `}</style>
+
       <div style={{
         maxWidth: '520px',
         margin: '0 auto',
@@ -45,10 +60,11 @@ export default function App() {
           </p>
         </header>
 
-        {/* Mic button */}
+        {/* Mic button + audio level */}
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <button
             onClick={isListening ? stopListening : startListening}
+            aria-label={isListening ? 'Stop listening to microphone' : 'Start listening to microphone'}
             style={{
               padding: '0.75rem 2rem',
               borderRadius: '12px',
@@ -65,38 +81,91 @@ export default function App() {
                 ? '0 4px 20px rgba(239, 68, 68, 0.3)'
                 : '0 4px 20px rgba(99, 102, 241, 0.3)',
               transition: 'all 0.2s ease',
+              animation: isListening ? 'pulse-ring 2s infinite' : 'none',
             }}
           >
             {isListening ? '⏹ Stop Listening' : '🎤 Start Listening'}
           </button>
 
+          {/* Audio level meter - shows mic is working */}
+          {isListening && (
+            <div
+              role="meter"
+              aria-label="Microphone input level"
+              aria-valuenow={Math.round(audioLevel * 100)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              style={{
+                marginTop: '0.75rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+              }}
+            >
+              <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Mic</span>
+              <div style={{
+                width: '120px',
+                height: '4px',
+                borderRadius: '2px',
+                background: 'rgba(100, 116, 139, 0.15)',
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  width: `${Math.max(2, audioLevel * 100)}%`,
+                  height: '100%',
+                  borderRadius: '2px',
+                  background: audioLevel > 0.7
+                    ? '#ef4444'
+                    : audioLevel > 0.3
+                      ? '#22c55e'
+                      : '#64748b',
+                  transition: 'width 0.05s ease-out, background 0.15s ease',
+                }} />
+              </div>
+              <span style={{ fontSize: '0.65rem', color: '#475569', minWidth: '20px' }}>
+                {audioLevel < 0.02 ? '—' : audioLevel > 0.7 ? 'Loud' : audioLevel > 0.3 ? 'Good' : 'Low'}
+              </span>
+            </div>
+          )}
+
           {error && (
-            <div style={{
-              marginTop: '1rem',
-              padding: '0.75rem',
-              borderRadius: '8px',
-              background: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.2)',
-              color: '#fca5a5',
-              fontSize: '0.85rem',
-            }}>
+            <div
+              role="alert"
+              style={{
+                marginTop: '1rem',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.2)',
+                color: '#fca5a5',
+                fontSize: '0.85rem',
+              }}
+            >
               {error}
             </div>
           )}
         </div>
 
         {/* Mode tabs */}
-        <div style={{
-          display: 'flex',
-          gap: '4px',
-          background: 'rgba(100, 116, 139, 0.08)',
-          borderRadius: '12px',
-          padding: '4px',
-          marginBottom: '1.5rem',
-        }}>
+        <div
+          role="tablist"
+          aria-label="Detection mode"
+          style={{
+            display: 'flex',
+            gap: '4px',
+            background: 'rgba(100, 116, 139, 0.08)',
+            borderRadius: '12px',
+            padding: '4px',
+            marginBottom: '0.5rem',
+          }}
+        >
           {MODES.map((m) => (
             <button
               key={m.key}
+              role="tab"
+              aria-selected={mode === m.key}
+              aria-controls={`panel-${m.key}`}
               onClick={() => setMode(m.key)}
               title={m.description}
               style={{
@@ -118,31 +187,44 @@ export default function App() {
           ))}
         </div>
 
+        {/* Mode description */}
+        <div style={{
+          textAlign: 'center',
+          fontSize: '0.75rem',
+          color: '#64748b',
+          marginBottom: '1.5rem',
+          lineHeight: 1.4,
+        }}>
+          {currentMode.icon} {currentMode.description}
+        </div>
+
         {/* Active mode content */}
-        {mode === 'tuner' && (
-          <PitchMeter note={currentNote} pitch={currentPitch} />
-        )}
-        {mode === 'teaching' && (
-          <TeachingMode
-            currentNote={currentNote}
-            currentPitch={currentPitch}
-            isListening={isListening}
-          />
-        )}
-        {mode === 'test' && (
-          <TestMode
-            currentNote={currentNote}
-            currentPitch={currentPitch}
-            isListening={isListening}
-          />
-        )}
-        {mode === 'scale' && (
-          <ScalePractice
-            currentNote={currentNote}
-            currentPitch={currentPitch}
-            isListening={isListening}
-          />
-        )}
+        <div role="tabpanel" id={`panel-${mode}`}>
+          {mode === 'tuner' && (
+            <PitchMeter note={currentNote} pitch={currentPitch} isListening={isListening} />
+          )}
+          {mode === 'teaching' && (
+            <TeachingMode
+              currentNote={currentNote}
+              currentPitch={currentPitch}
+              isListening={isListening}
+            />
+          )}
+          {mode === 'test' && (
+            <TestMode
+              currentNote={currentNote}
+              currentPitch={currentPitch}
+              isListening={isListening}
+            />
+          )}
+          {mode === 'scale' && (
+            <ScalePractice
+              currentNote={currentNote}
+              currentPitch={currentPitch}
+              isListening={isListening}
+            />
+          )}
+        </div>
 
         {/* Footer info */}
         <footer style={{

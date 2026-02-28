@@ -137,7 +137,7 @@ export interface AudioPipeline {
 }
 
 export function createAudioPipeline(
-  onPitch: (result: PitchResult | null) => void,
+  onPitch: (result: PitchResult | null, audioLevel?: number) => void,
   bufferSize: number = 4096
 ): AudioPipeline {
   let audioContext: AudioContext | null = null;
@@ -159,12 +159,15 @@ export function createAudioPipeline(
       if (abs > maxAmplitude) maxAmplitude = abs;
     }
 
+    // Normalize level to 0-1 range (clamp at 0.5 amplitude as "max" for display)
+    const level = Math.min(1, maxAmplitude / 0.5);
+
     // Only try pitch detection if there's meaningful audio
     if (maxAmplitude > 0.01) {
       const result = detectPitch(buffer, audioContext!.sampleRate);
-      onPitch(result);
+      onPitch(result, level);
     } else {
-      onPitch(null);
+      onPitch(null, level);
     }
 
     animationFrameId = requestAnimationFrame(processAudio);

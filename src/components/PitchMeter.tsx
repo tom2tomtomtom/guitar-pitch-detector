@@ -4,9 +4,10 @@ import type { PitchResult } from '../lib/pitchDetector';
 interface PitchMeterProps {
   note: NoteInfo | null;
   pitch: PitchResult | null;
+  isListening?: boolean;
 }
 
-export function PitchMeter({ note, pitch }: PitchMeterProps) {
+export function PitchMeter({ note, pitch, isListening }: PitchMeterProps) {
   const cents = note?.cents ?? 0;
   const clampedCents = Math.max(-50, Math.min(50, cents));
   // Map -50..+50 to 0..100 for the gauge position
@@ -17,6 +18,19 @@ export function PitchMeter({ note, pitch }: PitchMeterProps) {
     if (absCents <= 5) return '#22c55e';  // green — in tune
     if (absCents <= 15) return '#eab308'; // yellow — close
     return '#ef4444';                     // red — out of tune
+  };
+
+  const getTuneLabel = (c: number): string => {
+    const absCents = Math.abs(c);
+    if (absCents <= 5) return 'In Tune';
+    if (absCents <= 15) return 'Almost';
+    return c > 0 ? 'Sharp' : 'Flat';
+  };
+
+  const getDirectionHint = (c: number): string | null => {
+    const absCents = Math.abs(c);
+    if (absCents <= 5) return null;
+    return c > 0 ? '↓ tune down' : '↑ tune up';
   };
 
   return (
@@ -36,6 +50,23 @@ export function PitchMeter({ note, pitch }: PitchMeterProps) {
               {note.name}
               <span style={{ fontSize: '2.5rem', opacity: 0.6 }}>{note.octave}</span>
             </div>
+
+            {/* Tuning status text label (accessibility) */}
+            <div style={{
+              fontSize: '0.9rem',
+              fontWeight: 600,
+              color: getInTuneColor(cents),
+              marginTop: '0.25rem',
+              transition: 'color 0.15s ease',
+            }}>
+              {getTuneLabel(cents)}
+              {getDirectionHint(cents) && (
+                <span style={{ fontSize: '0.75rem', fontWeight: 400, marginLeft: '0.5rem', opacity: 0.7 }}>
+                  {getDirectionHint(cents)}
+                </span>
+              )}
+            </div>
+
             <div style={{
               fontSize: '1.1rem',
               color: '#94a3b8',
@@ -52,7 +83,7 @@ export function PitchMeter({ note, pitch }: PitchMeterProps) {
             color: '#475569',
             fontFamily: 'system-ui, sans-serif',
           }}>
-            Play a note...
+            {isListening ? 'Play a note...' : 'Press Start Listening to begin'}
           </div>
         )}
       </div>
@@ -126,8 +157,28 @@ export function PitchMeter({ note, pitch }: PitchMeterProps) {
           marginTop: '2.5rem',
           fontSize: '0.8rem',
           color: '#64748b',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '0.5rem',
         }}>
-          Confidence: {(pitch.confidence * 100).toFixed(0)}%
+          <span>Confidence:</span>
+          <div style={{
+            width: '60px',
+            height: '4px',
+            borderRadius: '2px',
+            background: 'rgba(100, 116, 139, 0.15)',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              width: `${pitch.confidence * 100}%`,
+              height: '100%',
+              borderRadius: '2px',
+              background: pitch.confidence > 0.9 ? '#22c55e' : pitch.confidence > 0.8 ? '#eab308' : '#ef4444',
+              transition: 'width 0.1s ease-out',
+            }} />
+          </div>
+          <span>{(pitch.confidence * 100).toFixed(0)}%</span>
         </div>
       )}
     </div>

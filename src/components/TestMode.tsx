@@ -20,14 +20,21 @@ interface Challenge {
   prompt: string;
 }
 
+type Difficulty = 'beginner' | 'intermediate' | 'advanced';
+
+const DIFFICULTY_CONFIG: Record<Difficulty, { label: string; maxFret: number; description: string }> = {
+  beginner:     { label: 'Beginner',     maxFret: 4,  description: 'Frets 0–4' },
+  intermediate: { label: 'Intermediate', maxFret: 7,  description: 'Frets 0–7' },
+  advanced:     { label: 'Advanced',     maxFret: 12, description: 'Frets 0–12' },
+};
+
 // Build a pool of guitar-friendly challenges
-function buildChallengePool(): Challenge[] {
+function buildChallengePool(maxFret: number): Challenge[] {
   const fretboard = buildFretboard();
   const challenges: Challenge[] = [];
 
   for (const pos of fretboard) {
-    // Skip very high frets for beginners (keep frets 0-7)
-    if (pos.fret > 7) continue;
+    if (pos.fret > maxFret) continue;
 
     const stringLabel = STRING_NAMES[pos.string - 1];
     const fretLabel = pos.fret === 0 ? 'open' : `fret ${pos.fret}`;
@@ -46,8 +53,6 @@ function pickRandom(pool: Challenge[], exclude?: Challenge): Challenge {
   return filtered[Math.floor(Math.random() * filtered.length)];
 }
 
-const CHALLENGE_POOL = buildChallengePool();
-
 interface ScoreEntry {
   challenge: Challenge;
   hit: boolean;
@@ -55,11 +60,14 @@ interface ScoreEntry {
 }
 
 export function TestMode({ currentNote, currentPitch, isListening }: TestModeProps) {
-  const [challenge, setChallenge] = useState<Challenge>(() => pickRandom(CHALLENGE_POOL));
+  const [difficulty, setDifficulty] = useState<Difficulty>('intermediate');
+  const [challengePool, setChallengePool] = useState(() => buildChallengePool(DIFFICULTY_CONFIG.intermediate.maxFret));
+  const [challenge, setChallenge] = useState<Challenge>(() => pickRandom(buildChallengePool(DIFFICULTY_CONFIG.intermediate.maxFret)));
   const [tolerance, setTolerance] = useState(50);
   const [score, setScore] = useState<ScoreEntry[]>([]);
   const [isMatched, setIsMatched] = useState(false);
   const [streakCount, setStreakCount] = useState(0);
+  const [bestStreak, setBestStreak] = useState(0);
   const [feedbackNote, setFeedbackNote] = useState<string | null>(null);
   const holdTimerRef = useRef<number | null>(null);
   const matchedRef = useRef(false);
@@ -67,13 +75,26 @@ export function TestMode({ currentNote, currentPitch, isListening }: TestModePro
 
   const targetNote = challenge.position.note;
 
-  const advanceChallenge = useCallback(() => {
-    const next = pickRandom(CHALLENGE_POOL, challenge);
+  // Rebuild pool when difficulty changes
+  useEffect(() => {
+    const pool = buildChallengePool(DIFFICULTY_CONFIG[difficulty].maxFret);
+    setChallengePool(pool);
+    const next = pickRandom(pool);
     setChallenge(next);
     setIsMatched(false);
     matchedRef.current = false;
     setFeedbackNote(null);
-  }, [challenge]);
+    setScore([]);
+    setStreakCount(0);
+  }, [difficulty]);
+
+  const advanceChallenge = useCallback(() => {
+    const next = pickRandom(challengePool, challenge);
+    setChallenge(next);
+    setIsMatched(false);
+    matchedRef.current = false;
+    setFeedbackNote(null);
+  }, [challenge, challengePool]);
 
   // Check note match
   useEffect(() => {
@@ -98,7 +119,11 @@ export function TestMode({ currentNote, currentPitch, isListening }: TestModePro
         matchedRef.current = true;
         setIsMatched(true);
         setScore((prev) => [...prev, { challenge, hit: true, cents }]);
-        setStreakCount((prev) => prev + 1);
+        setStreakCount((prev) => {
+          const next = prev + 1;
+          setBestStreak((best) => Math.max(best, next));
+          return next;
+        });
         setTimeout(advanceChallenge, 1000);
       }, 500);
     } else if (!match && holdTimerRef.current) {
@@ -123,6 +148,7 @@ export function TestMode({ currentNote, currentPitch, isListening }: TestModePro
   const resetScore = () => {
     setScore([]);
     setStreakCount(0);
+    setBestStreak(0);
     advanceChallenge();
   };
 
@@ -134,8 +160,54 @@ export function TestMode({ currentNote, currentPitch, isListening }: TestModePro
     ? isNoteMatch(currentPitch.frequency, targetNote, tolerance)
     : null;
 
+  // Compute directional hint
+  const getDirectionHint = (): string | null => {
+    if (!currentPitch || !currentNote || isMatched) return null;
+    const { cents } = isNoteMatch(currentPitch.frequency, targetNote, tolerance);
+    if (Math.abs(cents) <= tolerance) return null;
+    // If cents is very negative, they need to play higher
+    // If cents is very positive, they need to play lower
+    if (cents < -100) return '↑ Play higher';
+    if (cents > 100) return '↓ Play lower';
+    if (cents < 0) return '↑ A bit higher';
+    return '↓ A bit lower';
+  };
+
+  const directionHint = getDirectionHint();
+
   return (
     <div style={{ padding: '1rem 0' }}>
+      {/* Difficulty selector */}
+      <div style={{
+        display: 'flex',
+        gap: '4px',
+        justifyContent: 'center',
+        marginBottom: '1.25rem',
+      }}>
+        {(Object.entries(DIFFICULTY_CONFIG) as [Difficulty, typeof DIFFICULTY_CONFIG[Difficulty]][]).map(([key, config]) => (
+          <button
+            key={key}
+            onClick={() => setDifficulty(key)}
+            aria-pressed={difficulty === key}
+            style={{
+              padding: '0.4rem 0.75rem',
+              borderRadius: '6px',
+              border: `1px solid ${difficulty === key ? 'rgba(99, 102, 241, 0.4)' : 'rgba(100, 116, 139, 0.15)'}`,
+              background: difficulty === key ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+              color: difficulty === key ? '#a5b4fc' : '#64748b',
+              cursor: 'pointer',
+              fontSize: '0.75rem',
+              fontWeight: difficulty === key ? 600 : 400,
+              fontFamily: 'system-ui, sans-serif',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            {config.label}
+            <span style={{ display: 'block', fontSize: '0.6rem', opacity: 0.7 }}>{config.description}</span>
+          </button>
+        ))}
+      </div>
+
       {/* Challenge prompt */}
       <div style={{
         textAlign: 'center',
@@ -150,7 +222,7 @@ export function TestMode({ currentNote, currentPitch, isListening }: TestModePro
           padding: '0 1rem',
         }}>
           {isMatched ? (
-            <span>Correct!</span>
+            <span>{streakCount >= 3 ? 'Awesome streak!' : 'Correct!'}</span>
           ) : (
             challenge.prompt
           )}
@@ -210,8 +282,10 @@ export function TestMode({ currentNote, currentPitch, isListening }: TestModePro
           transition: 'all 0.2s ease',
           minHeight: '40px',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
+          gap: '0.25rem',
         }}>
           {isMatched ? (
             <span style={{ color: '#22c55e', fontSize: '1rem', fontWeight: 600 }}>
@@ -222,9 +296,16 @@ export function TestMode({ currentNote, currentPitch, isListening }: TestModePro
               That's it — hold steady! ({matchResult.cents > 0 ? '+' : ''}{matchResult.cents} cents)
             </span>
           ) : feedbackNote ? (
-            <span style={{ color: '#94a3b8' }}>
-              You're playing {feedbackNote}
-            </span>
+            <>
+              <span style={{ color: '#94a3b8' }}>
+                You're playing {feedbackNote}
+              </span>
+              {directionHint && (
+                <span style={{ color: '#6366f1', fontSize: '0.8rem', fontWeight: 500 }}>
+                  {directionHint}
+                </span>
+              )}
+            </>
           ) : (
             <span style={{ color: '#475569' }}>Listening...</span>
           )}
@@ -239,10 +320,10 @@ export function TestMode({ currentNote, currentPitch, isListening }: TestModePro
         marginBottom: '1.25rem',
         flexWrap: 'wrap',
       }}>
-        <button onClick={skipChallenge} style={btnStyle('#475569')}>
+        <button onClick={skipChallenge} style={btnStyle('#475569')} aria-label="Skip this challenge">
           Skip
         </button>
-        <button onClick={resetScore} style={btnStyle('#64748b')}>
+        <button onClick={resetScore} style={btnStyle('#64748b')} aria-label="Reset score and start over">
           Reset
         </button>
       </div>
@@ -262,6 +343,7 @@ export function TestMode({ currentNote, currentPitch, isListening }: TestModePro
           max="100"
           value={tolerance}
           onChange={(e) => setTolerance(Number(e.target.value))}
+          aria-label={`Tolerance: plus or minus ${tolerance} cents`}
           style={{ width: '120px' }}
         />
         <span style={{ fontSize: '0.8rem', color: '#94a3b8', minWidth: '60px' }}>
@@ -273,26 +355,28 @@ export function TestMode({ currentNote, currentPitch, isListening }: TestModePro
       <div style={{
         display: 'flex',
         justifyContent: 'center',
-        gap: '2rem',
+        gap: '1.5rem',
         padding: '1rem',
         background: 'rgba(100, 116, 139, 0.05)',
         borderRadius: '12px',
+        flexWrap: 'wrap',
       }}>
         <ScoreStat label="Accuracy" value={`${accuracy}%`} />
         <ScoreStat label="Hits" value={`${hits}/${total}`} />
         <ScoreStat label="Streak" value={`${streakCount}`} highlight={streakCount >= 3} />
+        <ScoreStat label="Best" value={`${bestStreak}`} subtle />
       </div>
     </div>
   );
 }
 
-function ScoreStat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+function ScoreStat({ label, value, highlight, subtle }: { label: string; value: string; highlight?: boolean; subtle?: boolean }) {
   return (
     <div style={{ textAlign: 'center' }}>
       <div style={{
-        fontSize: '1.5rem',
+        fontSize: subtle ? '1.2rem' : '1.5rem',
         fontWeight: 700,
-        color: highlight ? '#22c55e' : '#e2e8f0',
+        color: highlight ? '#22c55e' : subtle ? '#64748b' : '#e2e8f0',
       }}>
         {value}
       </div>

@@ -33,11 +33,15 @@ export function Fretboard({ highlightPositions = [], activeNote, targetPositions
     FRETBOARD.find((p) => p.string === s && p.fret === f);
 
   return (
-    <div style={{ overflowX: 'auto', padding: '0.5rem 0' }}>
-      <div style={{ minWidth: '480px' }}>
+    <div
+      role="img"
+      aria-label="Guitar fretboard showing note positions"
+      style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', padding: '0.5rem 0' }}
+    >
+      <div style={{ minWidth: '420px' }}>
         {/* Fret numbers */}
         <div style={{ display: 'flex', marginBottom: '2px' }}>
-          <div style={{ width: '38px', flexShrink: 0 }} />
+          <div style={{ width: '34px', flexShrink: 0 }} />
           {Array.from({ length: NUM_FRETS + 1 }, (_, f) => (
             <div
               key={f}
@@ -46,7 +50,7 @@ export function Fretboard({ highlightPositions = [], activeNote, targetPositions
                 textAlign: 'center',
                 fontSize: '0.6rem',
                 color: '#475569',
-                minWidth: '32px',
+                minWidth: '28px',
               }}
             >
               {f === 0 ? '' : f}
@@ -58,15 +62,15 @@ export function Fretboard({ highlightPositions = [], activeNote, targetPositions
         {Array.from({ length: 6 }, (_, si) => {
           const stringNum = si + 1;
           return (
-            <div key={stringNum} style={{ display: 'flex', alignItems: 'center', height: '30px' }}>
+            <div key={stringNum} style={{ display: 'flex', alignItems: 'center', height: '32px' }}>
               {/* String label */}
               <div style={{
-                width: '38px',
+                width: '34px',
                 flexShrink: 0,
-                fontSize: '0.65rem',
+                fontSize: '0.6rem',
                 color: '#94a3b8',
                 textAlign: 'right',
-                paddingRight: '6px',
+                paddingRight: '4px',
                 fontWeight: 500,
               }}>
                 {STRING_NAMES[si]}
@@ -84,7 +88,7 @@ export function Fretboard({ highlightPositions = [], activeNote, targetPositions
                     key={f}
                     style={{
                       flex: 1,
-                      minWidth: '32px',
+                      minWidth: '28px',
                       height: '100%',
                       display: 'flex',
                       alignItems: 'center',
@@ -111,13 +115,13 @@ export function Fretboard({ highlightPositions = [], activeNote, targetPositions
                     {/* Note dot */}
                     {(lit || active || target) && (
                       <div style={{
-                        width: '22px',
-                        height: '22px',
+                        width: '24px',
+                        height: '24px',
                         borderRadius: '50%',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '0.55rem',
+                        fontSize: '0.6rem',
                         fontWeight: 700,
                         zIndex: 2,
                         transition: 'all 0.15s ease',
@@ -151,13 +155,13 @@ export function Fretboard({ highlightPositions = [], activeNote, targetPositions
 
         {/* Fret dots (inlays) */}
         <div style={{ display: 'flex', marginTop: '4px' }}>
-          <div style={{ width: '38px', flexShrink: 0 }} />
+          <div style={{ width: '34px', flexShrink: 0 }} />
           {Array.from({ length: NUM_FRETS + 1 }, (_, f) => (
             <div
               key={f}
               style={{
                 flex: 1,
-                minWidth: '32px',
+                minWidth: '28px',
                 textAlign: 'center',
                 fontSize: '0.5rem',
                 color: '#475569',

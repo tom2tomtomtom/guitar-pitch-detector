@@ -119,16 +119,37 @@ export function TeachingMode({ currentNote, currentPitch, isListening }: Teachin
               </div>
             )}
 
-            {/* Tuning feedback */}
+            {/* Tuning feedback with directional hint */}
             <div style={{
               marginTop: '0.4rem',
               fontSize: '0.8rem',
               color: tuneColor,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
             }}>
-              {absCents <= 5
-                ? 'In tune!'
-                : `${cents > 0 ? '+' : ''}${cents} cents ${cents > 0 ? 'sharp' : 'flat'}`}
+              <span>
+                {absCents <= 5
+                  ? 'In tune!'
+                  : `${cents > 0 ? '+' : ''}${cents} cents ${cents > 0 ? 'sharp' : 'flat'}`}
+              </span>
+              {absCents > 5 && (
+                <span style={{ opacity: 0.7, fontSize: '0.75rem' }}>
+                  {cents > 0 ? '↓ tune down' : '↑ tune up'}
+                </span>
+              )}
             </div>
+
+            {/* Confidence */}
+            {currentPitch && (
+              <div style={{
+                marginTop: '0.4rem',
+                fontSize: '0.7rem',
+                color: '#64748b',
+              }}>
+                Confidence: {(currentPitch.confidence * 100).toFixed(0)}%
+              </div>
+            )}
           </>
         ) : (
           <div style={{ fontSize: '1.5rem', color: '#475569' }}>
@@ -151,32 +172,38 @@ export function TeachingMode({ currentNote, currentPitch, isListening }: Teachin
         />
       </div>
 
-      {/* Recent notes trail */}
+      {/* Recent notes trail with visual hierarchy */}
       {recentNotes.length > 0 && (
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.4rem' }}>
             Recent notes
           </div>
           <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            {recentNotes.map((n, i) => (
-              <div
-                key={`${n.fullName}-${i}`}
-                style={{
-                  padding: '0.25rem 0.5rem',
-                  borderRadius: '6px',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  background: i === recentNotes.length - 1
-                    ? 'rgba(99,102,241,0.2)'
-                    : 'rgba(100,116,139,0.08)',
-                  color: i === recentNotes.length - 1 ? '#a5b4fc' : '#94a3b8',
-                  border: `1px solid ${i === recentNotes.length - 1 ? 'rgba(99,102,241,0.3)' : 'rgba(100,116,139,0.1)'}`,
-                }}
-              >
-                {n.name}
-                <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>{n.octave}</span>
-              </div>
-            ))}
+            {recentNotes.map((n, i) => {
+              const isLatest = i === recentNotes.length - 1;
+              const fadeLevel = (i + 1) / recentNotes.length;
+              return (
+                <div
+                  key={`${n.fullName}-${i}`}
+                  style={{
+                    padding: '0.25rem 0.5rem',
+                    borderRadius: '6px',
+                    fontSize: '0.75rem',
+                    fontWeight: isLatest ? 600 : 500,
+                    background: isLatest
+                      ? 'rgba(99,102,241,0.2)'
+                      : 'rgba(100,116,139,0.08)',
+                    color: isLatest ? '#a5b4fc' : '#94a3b8',
+                    border: `1px solid ${isLatest ? 'rgba(99,102,241,0.3)' : 'rgba(100,116,139,0.1)'}`,
+                    opacity: isLatest ? 1 : 0.4 + fadeLevel * 0.5,
+                    transition: 'opacity 0.2s ease',
+                  }}
+                >
+                  {n.name}
+                  <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>{n.octave}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
